@@ -1,0 +1,41 @@
+import wslite.rest.RESTClient
+
+ext {
+    host = "http://localhost"
+    // 管理者で[管理] => [設定] => [認証] => [RESTによるWebサービスを有効にする]
+    // ログインした後に[個人設定]から発行出来るAPIアクセスキー
+    aipKey = "APIアクセスキー"
+    projectId = "myproject"
+    // バージョン番号。「メジャーバージョン.マイナーバージョン.ビルド」リビジョンを入れも問題無い
+    // Redmineの最新バージョンがメジャー.マイナーで無い場合はこのヴァージョンが作成される
+    // メジャー.マイナーが一致した場合ビルド番号がインクリメントされる
+    currantVersion = "v0.0.0"
+}
+
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath('com.github.groovy-wslite:groovy-wslite:1.0.0')
+    }
+}
+
+task release << {
+    def client = new RESTClient(host)
+    def response = client.get(path: "/projects/${projectId}/versions.json", headers: ['X-Redmine-API-Key': aipKey])
+
+    def versions = [:]
+    response.json.versions.each { versions.put(it.id, it.name) }
+
+    versions = versions.sort() { kv1, kv2 -> return kv2.key - kv1.key }
+    String currant = versions.get(versions.keySet().getAt(0))
+
+    def newVersion =  !currant || !currant.startsWith(currantVersion.replaceFirst(/[0-9]*$/, "")) ? currantVersion : currant.replaceFirst(/([\-0-9]*)$/) { ++Integer.valueOf(it[0]) }
+
+    println "added version ${newVersion}"
+
+    response = client.post(path: "/projects/${projectId}/versions.json", headers: ['X-Redmine-API-Key': aipKey]) {
+        json version:[name:newVersion]
+    }
+}
